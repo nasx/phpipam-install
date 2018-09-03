@@ -1,0 +1,4 @@
+- name: Install phpIPAM on RHEL 7
+  hosts: all
+  roles:
+    - role: phpIPAM

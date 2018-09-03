@@ -1,0 +1,224 @@
+- name: Make Sure Extras and Options Repositories are Enabled
+  rhsm_repository:
+    name: "{{ item }}"
+    state: enabled
+  with_items:
+    - "rhel-*-optional-rpms"
+    - "rhel-*-extras-rpms"
+
+- name: Setup /etc/environment
+  copy:
+    src: files/environment
+    dest: /etc/environment
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Copy http_ping.tt SELinux Policy
+  copy:
+    src: files/http_ping.tt
+    dest: /tmp/http_ping.tt
+    owner: root
+    group: root
+    mode: 0600
+
+- name: Install EPEL
+  yum:
+    name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+    state: installed
+
+- name: Install Required Packages
+  yum:
+    name: "{{ item }}"
+    state: installed
+  with_items:
+    - httpd
+    - mod_ssl
+    - mariadb-server
+    - php
+    - php-cli
+    - php-gd
+    - php-common
+    - php-ldap
+    - php-pdo
+    - php-pear
+    - php-snmp
+    - php-xml
+    - php-mysql
+    - php-mbstring
+    - git
+    - wget
+    - php-mcrypt
+    - vim-enhanced
+    - wget
+    - MySQL-python
+    - python-firewall
+    - policycoreutils-python
+
+- name: Generate httpd.conf
+  template:
+    src: templates/httpd.conf.j2
+    dest: /etc/httpd/conf/httpd.conf
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Generate php.ini
+  template:
+    src: templates/php.ini.j2
+    dest: /etc/php.ini
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Allow 80 on Firewall
+  firewalld:
+    service: httpd
+    state: enabled
+    permanent: true
+  ignore_errors: yes
+
+- name: Enable httpd & mariadb Service
+  service:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  with_items:
+    - httpd
+    - mariadb
+
+- name: mysql_secure_installation
+  block:
+    - name: Set the root Password
+      mysql_user:
+        user: root
+        password: "{{ mysql_root_password }}"
+        host: localhost
+
+    - name: Delete anonymous MySQL server user for ansible_fqdn
+      mysql_user:
+        user: ""
+        host: "{{ ansible_fqdn }}"
+        state: absent
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_host: localhost
+
+    - name: Delete anonymous MySQL server user for localhost
+      mysql_user:
+        user: ""
+        state: absent
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_host: localhost
+
+    - name: Secure the MySQL root user for IPv6 localhost (::1)
+      mysql_user:
+        user: root
+        password: "{{ mysql_root_password }}"
+        host: "::1"
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_host: localhost
+
+    - name: Secure the MySQL root user for IPv4 localhost (127.0.0.1)
+      mysql_user:
+        user: root
+        password: "{{ mysql_root_password }}"
+        host: "127.0.0.1"
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_host: localhost
+
+    - name: Secure the MySQL root user for server_hostname domain
+      mysql_user:
+        user: root
+        password: "{{ mysql_root_password }}"
+        host: "{{ ansible_fqdn }}"
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_host: localhost
+
+    - name: Remove the MySQL test database
+      mysql_db:
+        db: test 
+        state: absent
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_host: localhost
+  when:
+    - mysql_secure_installation is defined
+    - mysql_secure_installation
+
+- name: Create phpIPAM Database
+  mysql_db:
+    db: "{{ phpipam_database_name }}"
+    state: present
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    login_host: localhost
+
+- name: Create phpIPAM User and Adjust Privileges
+  mysql_user:
+    user: "{{ phpipam_database_username }}"
+    password: "{{ phpipam_database_password }}"
+    host: localhost
+    priv: "{{ phpipam_database_name }}.*:ALL"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    login_host: localhost
+
+- name: Clone phpIPAM from git
+  git:
+    repo: "{{ phpipam_git_url }}"
+    dest: /var/www/html
+
+- name: Handle File Permissions
+  shell: find /var/www/html -type f -exec chmod 644 {} \;
+
+- name: Handle Directory Permissions
+  shell: find /var/www/html -type d -exec chmod 755 {} \;
+
+- name: Handle SELinux Contexts
+  file:
+    dest: "{{ item }}"
+    setype: httpd_sys_rw_content_t
+    recurse: yes
+  with_items:
+    - "/var/www/html/app/admin/import-export/upload"
+    - "/var/www/html/app/subnets/import-subnet/upload"
+    - "/var/www/html/css/1.3.1/images/logo"
+
+- name: Generate config.php
+  template:
+    src: templates/config.php.j2
+    dest: /var/www/html/config.php
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Generate install.sql
+  template:
+    src: templates/install.sql.j2
+    dest: /tmp/install.sql
+    owner: root
+    group: root
+    mode: 0600
+
+- name: Import phpIPAM DB
+  mysql_db:
+    name: "{{ phpipam_database_name }}"
+    state: import
+    target: /tmp/install.sql
+    login_host: localhost
+    login_user: "{{ phpipam_database_username }}"
+    login_password: "{{ phpipam_database_password }}"
+
+- name: Compile SELinux Module for ping
+  command: /bin/checkmodule -M -m -o /tmp/http_ping.mod /tmp/http_ping.tt
+
+- name: Create SELinux Module Package for ping
+  command: /bin/semodule_package -o /tmp/http_ping.pp -m /tmp/http_ping.mod
+
+- name: Install SELinux Module for ping
+  command: /sbin/semodule -i /tmp/http_ping.pp

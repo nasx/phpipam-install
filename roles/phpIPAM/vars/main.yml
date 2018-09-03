@@ -1,0 +1,11 @@
+---
+mysql_secure_installation: True
+php_timezone: "America/New_York"
+phpipam_git_url: "https://github.com/phpipam/phpipam.git"
+
+# The following variables should be placed in a vault
+#
+# phpipam_database_username: "phpipam"
+# phpipam_database_password: "userpass"
+# phpipam_database_name: "phpipam"
+# mysql_root_password: "rootpass"
