@@ -1,26 +1,11 @@
-- name: Make Sure Extras and Options Repositories are Enabled
+- name: Make Sure Base, Extras and Options Repositories are Enabled
   rhsm_repository:
     name: "{{ item }}"
     state: enabled
   with_items:
-    - "rhel-*-optional-rpms"
-    - "rhel-*-extras-rpms"
-
-- name: Setup /etc/environment
-  copy:
-    src: files/environment
-    dest: /etc/environment
-    owner: root
-    group: root
-    mode: 0644
-
-- name: Copy http_ping.tt SELinux Policy
-  copy:
-    src: files/http_ping.tt
-    dest: /tmp/http_ping.tt
-    owner: root
-    group: root
-    mode: 0600
+    - "rhel-7-server-rpms"
+    - "rhel-7-server-optional-rpms"
+    - "rhel-7-server-extras-rpms"
 
 - name: Install EPEL
   yum:
@@ -55,6 +40,14 @@
     - python-firewall
     - policycoreutils-python
 
+- name: Setup /etc/environment
+  copy:
+    src: files/environment
+    dest: /etc/environment
+    owner: root
+    group: root
+    mode: 0644
+
 - name: Generate httpd.conf
   template:
     src: templates/httpd.conf.j2
@@ -87,7 +80,7 @@
     - httpd
     - mariadb
 
-- name: mysql_secure_installation
+- name: Perform mysql_secure_installation
   block:
     - name: Set the root Password
       mysql_user:
@@ -214,11 +207,24 @@
     login_user: "{{ phpipam_database_username }}"
     login_password: "{{ phpipam_database_password }}"
 
-- name: Compile SELinux Module for ping
-  command: /bin/checkmodule -M -m -o /tmp/http_ping.mod /tmp/http_ping.tt
+- name: Setup SELinux for Subnet Discovery
+  block:
+    - name: Copy http_ping.tt SELinux Policy
+      copy:
+        src: files/http_ping.tt
+        dest: /tmp/http_ping.tt
+        owner: root
+        group: root
+        mode: 0600
 
-- name: Create SELinux Module Package for ping
-  command: /bin/semodule_package -o /tmp/http_ping.pp -m /tmp/http_ping.mod
+    - name: Compile SELinux Module for ping
+      command: /bin/checkmodule -M -m -o /tmp/http_ping.mod /tmp/http_ping.tt
 
-- name: Install SELinux Module for ping
-  command: /sbin/semodule -i /tmp/http_ping.pp
+    - name: Create SELinux Module Package for ping
+      command: /bin/semodule_package -o /tmp/http_ping.pp -m /tmp/http_ping.mod
+
+    - name: Install SELinux Module for ping
+      command: /sbin/semodule -i /tmp/http_ping.pp
+  when:
+    - setup_selinux_http_ping_policy is defined
+    - setup_selinux_http_ping_policy

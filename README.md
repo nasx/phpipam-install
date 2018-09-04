@@ -7,6 +7,7 @@ This Ansible role is designed to do a reference install on RHEL 7 using the RHEL
 | Variable Name | Values | Vault | Description |
 | :--- | :--- | :--- | :--- |
 | mysql_secure_installation | True/False | No | Perform the equivalent of running the mysql_secure_installation command. |
+| setup_selinux_http_ping_policy | True/False | No | Install http_ping custom policy to allow subnet discovery on SELinux enabled systems. |
 | php_timezone | String | No | See php documentation [3] for a list of valid vaules (default is America/New_York). |
 | phpipam_git_url | String | No | Link to the phpIPAM source code (default is https://github.com/phpipam/phpipam.git). |
 | phpipam_database_username | String | Yes | The username phpIPAM will use to connect to the MariaDB database (default is phpipam). |
@@ -32,7 +33,7 @@ The phpIPAM role is expecting a single host in your inventory file. The contents
 ipam.lab.local
 ```
 ### Running the Playbook
-To run the playbook we will use the ansible-playbook command to run the install.yml playbook. The install.yml playbook simple runs the phpIPAM role on all hosts marked in the provided inventory file.
+To run the playbook we will use the ansible-playbook command to run the install.yml playbook. The install.yml playbook simply runs the phpIPAM role on all hosts marked in the provided inventory file.
 
 The following example will leverage the root user (-u root) to login to the host defined in your inventory file. It will prompt you for the root password (-k) as well as the vault password (--ask-vault-pass) using the vault we created above (-e @vault). The playbook should run on the host(s) defined in the inventory file simply named inventory (-i inventory).
 ```bash
@@ -41,6 +42,6 @@ ansible-playbook -u root -k --ask-vault-pass -e @vault -i inventory install.yml
 ### Next Steps
 After successfully running the playbook you can login to phpIPAM using the default credentials: admin/ipamadmin.
 ## External Links
-[1] - https://phpipam.net/news/phpipam-installation-on-centos-7/
-[2] - https://phpipam.net/news/selinux-policy-for-icmp-checks/
+[1] - https://phpipam.net/news/phpipam-installation-on-centos-7/<br/>
+[2] - https://phpipam.net/news/selinux-policy-for-icmp-checks/<br/>
 [3] - http://php.net/manual/en/timezones.php

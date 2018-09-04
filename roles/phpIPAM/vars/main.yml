@@ -1,5 +1,6 @@
 ---
 mysql_secure_installation: True
+setup_selinux_http_ping_policy: True
 php_timezone: "America/New_York"
 phpipam_git_url: "https://github.com/phpipam/phpipam.git"
 
